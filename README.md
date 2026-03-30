@@ -71,11 +71,6 @@ The system replaces traditional motors with **electromagnetic coils and permanen
   * Sinusoidal functions (sin/cos)
   * Line-drawing algorithms (Bresenham)
 
-**Capabilities:**
-
-* Circle generation
-* Lissajous patterns
-* Directional beam control
 
 ---
 
