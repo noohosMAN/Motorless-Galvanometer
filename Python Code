@@ -1,0 +1,135 @@
+Code used to program the ESP-32:
+#define LED_PIN 13
+
+#define X_APWM_PIN 26 
+#define Y_BPWM_PIN 25  
+
+#define X_AIN1_PIN 13
+#define X_AIN2_PIN 14
+
+#define Y_BIN1_PIN 12
+#define Y_BIN2_PIN 27
+
+#define ANALOG_RANGE 255
+
+
+/******************************* DRIVER CONTROL *******************************/
+
+void setDriverPins() {
+  pinMode(LED_PIN,    OUTPUT);
+  pinMode(X_APWM_PIN, OUTPUT);
+  pinMode(Y_BPWM_PIN, OUTPUT);
+
+  pinMode(X_AIN1_PIN, OUTPUT);
+  pinMode(Y_BIN1_PIN, OUTPUT);
+  pinMode(X_AIN2_PIN, OUTPUT);
+  pinMode(Y_BIN2_PIN, OUTPUT);
+}
+
+// This function adjusts the pins for the TB6612FNG motor driver such that
+// the specified amplitude shows up in the output
+void plot(int16_t x, int16_t y) {
+  static bool    last_sign_x, last_sign_y;
+  static uint8_t last_pwm_x,  last_pwm_y;
+
+  delayMicroseconds(250);
+  const uint8_t x_pwm = abs(x);
+  const uint8_t y_pwm = abs(y);
+  if(last_pwm_x != x_pwm) {analogWrite(X_APWM_PIN, x_pwm); last_pwm_x = x_pwm;}
+  if(last_pwm_y != y_pwm) {analogWrite(Y_BPWM_PIN, y_pwm); last_pwm_y = y_pwm;}
+
+  const bool sign_y = y > 0;
+  const bool sign_x = x > 0;
+  
+  // Update the direction of the X driver
+  if(sign_x != last_sign_x) {
+    last_sign_x = sign_x;
+    digitalWrite(X_AIN1_PIN, HIGH);
+    digitalWrite(X_AIN2_PIN, HIGH);
+    digitalWrite(sign_x ? X_AIN1_PIN : X_AIN2_PIN, LOW);
+  }
+
+  // Update the direction of the Y driver
+  if(sign_y != last_sign_y) {
+    last_sign_y = sign_y;
+    digitalWrite(Y_BIN1_PIN, HIGH);
+    digitalWrite(Y_BIN2_PIN, HIGH);
+    digitalWrite(sign_y ? Y_BIN1_PIN : Y_BIN2_PIN, LOW);
+  }
+}
+
+/******************************* DRAWING PRIMITIVES *******************************/
+
+/**
+ * Bresenham's line algorithm
+ * 
+ * Modified from the Wikipedia
+ * 
+ * Reference:
+ *   https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
+ */
+
+void plotLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
+  int16_t dx = x1 - x0, dy = y1 - y0;
+  int16_t yi = 1, xi = 1;
+  if(dx < 0) {
+    xi = -1;
+    dx = -dx;
+  }
+  if(dy < 0) {
+    yi = -1;
+    dy = -dy;
+  }
+  if(dy < dx) {
+    int16_t D = 2*dy - dx;
+    int16_t y = y0;
+    for(int16_t x = x0; x != x1; x += xi) {
+      plot(x,y);
+      if(D > 0) {
+         y += yi;
+         D -= 2*dx;
+      }
+      D += 2*dy;
+    }
+    plot(x1,y);
+  } else {
+    int16_t D = 2*dx - dy;
+    int16_t x = x0;
+    for(int16_t y = y0; y != y1; y += yi) {
+      plot(x,y);
+      if(D > 0) {
+         x += xi;
+         D -= 2*dy;
+      }
+      D += 2*dx;
+    }
+    plot(x,y1);
+  }
+}
+
+
+
+void plotLineFloat(float x0, float y0, float x1, float y1) {
+  float a = 1;
+  const float s = a * ANALOG_RANGE;
+  
+  plotLine(x0 * s, y0 * s, x1 * s, y1 * s);
+}
+
+/******************************* MAIN PROGRAM *******************************/
+
+void setup() {
+  Serial.begin(9600);
+  setDriverPins();
+}
+
+void loop() {
+  static float a = 0;
+  const float x0 = cos(a), y0 = sin(a);
+  const float x1 = -x0,    y1 = -y0;
+  
+  plotLineFloat(x0, y0, x1, y1);
+  plotLineFloat(x1, y1, x0, y0);
+  a += 2*PI/360;
+}
+
